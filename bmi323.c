@@ -111,10 +111,8 @@ int8_t bmi323_init(struct bmi3_dev *dev)
 {
     /* Variable to define error */
     int8_t rslt;
-
     /* Null-pointer check */
     rslt = null_ptr_check(dev);
-
     if (rslt == BMI323_OK)
     {
         rslt = bmi3_init(dev);
