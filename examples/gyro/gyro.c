@@ -8,8 +8,11 @@
 /*!                 Header Files                                              */
 #include <stdio.h>
 #include <math.h>
-#include "bmi323.h"
-#include "common.h"
+#include "../../bmi323.h"
+#include "../../../BMI323_Wrapper.h"
+#include "esp_log.h"
+
+static const char *TAG = "VRGloveControllerBMI323Gyro";
 
 /******************************************************************************/
 /*!         Static Function Declaration                                       */
@@ -21,7 +24,7 @@
  *
  *  @return Status of execution.
  */
-static int8_t set_gyro_config(struct bmi3_dev *dev);
+static int8_t bmi3_set_gyro_config(struct bmi3_dev *dev);
 
 /*!
  *  @brief This function converts lsb to degree per second for 16 bit gyro at
@@ -33,13 +36,13 @@ static int8_t set_gyro_config(struct bmi3_dev *dev);
  *
  *  @return Degree per second.
  */
-static float lsb_to_dps(int16_t val, float dps, uint8_t bit_width);
+static float bmi3_lsb_to_dps(int16_t val, float dps, uint8_t bit_width);
 
 /******************************************************************************/
 /*!            Functions                                                      */
 
 /* This function starts the execution of program. */
-int main(void)
+int gyro_data(struct bmi3_dev *dev, float *x, float *y, float *z)
 {
     /* Status of API are returned to this variable. */
     int8_t rslt;
@@ -47,11 +50,7 @@ int main(void)
     /* Variable to define limit to print gyro data. */
     uint8_t limit = 100;
 
-    float x = 0, y = 0, z = 0;
     uint8_t indx = 0;
-
-    /* Sensor initialization configuration. */
-    struct bmi3_dev dev = { 0 };
 
     /* Create an instance of sensor data structure. */
     struct bmi3_sensor_data sensor_data = { 0 };
@@ -62,28 +61,12 @@ int main(void)
     /* Structure to define gyro configuration. */
     struct bmi3_sens_config config = { 0 };
 
-    /* Function to select interface between SPI and I2C, according to that the device structure gets updated.
-     * Interface reference is given as a parameter
-     * For I2C : BMI3_I2C_INTF
-     * For SPI : BMI3_SPI_INTF
-     */
-    rslt = bmi3_interface_init(&dev, BMI3_SPI_INTF);
-    bmi3_error_codes_print_result("bmi3_interface_init", rslt);
-
-    if (rslt == BMI323_OK)
-    {
-        /* Initialize bmi323. */
-        rslt = bmi323_init(&dev);
-        bmi3_error_codes_print_result("bmi323_init", rslt);
-
-        if (rslt == BMI323_OK)
-        {
             /* Gyro configuration settings. */
-            rslt = set_gyro_config(&dev);
+            rslt = bmi3_set_gyro_config(dev);
 
             if (rslt == BMI323_OK)
             {
-                rslt = bmi323_get_sensor_config(&config, 1, &dev);
+                rslt = bmi323_get_sensor_config(&config, 1, dev);
                 bmi3_error_codes_print_result("bmi323_get_sensor_config", rslt);
             }
 
@@ -92,54 +75,50 @@ int main(void)
                 /* Select gyro sensor. */
                 sensor_data.type = BMI323_GYRO;
 
-                printf("\nData set, Range, Gyr_Raw_X, Gyr_Raw_Y, Gyr_Raw_Z, Gyr_dps_X, Gyr_dps_Y, Gyr_dps_Z\n\n");
+                ESP_LOGI(TAG, "Data set, Range, Gyr_Raw_X, Gyr_Raw_Y, Gyr_Raw_Z, Gyr_dps_X, Gyr_dps_Y, Gyr_dps_Z");
 
                 /* Loop to print gyro data when interrupt occurs. */
                 while (indx <= limit)
                 {
                     /* To get the data ready interrupt status of gyro. */
-                    rslt = bmi323_get_int1_status(&int_status, &dev);
+                    rslt = bmi323_get_int1_status(&int_status, dev);
                     bmi3_error_codes_print_result("Get interrupt status", rslt);
 
                     /* To check the data ready interrupt status and print the status for 10 samples. */
                     if (int_status & BMI3_INT_STATUS_GYR_DRDY)
                     {
                         /* Get gyro data for x, y and z axis. */
-                        rslt = bmi323_get_sensor_data(&sensor_data, 1, &dev);
+                        rslt = bmi323_get_sensor_data(&sensor_data, 1, dev);
                         bmi3_error_codes_print_result("Get sensor data", rslt);
 
                         /* Converting lsb to degree per second for 16 bit gyro at 2000dps range. */
-                        x = lsb_to_dps(sensor_data.sens_data.gyr.x, (float)2000, dev.resolution);
-                        y = lsb_to_dps(sensor_data.sens_data.gyr.y, (float)2000, dev.resolution);
-                        z = lsb_to_dps(sensor_data.sens_data.gyr.z, (float)2000, dev.resolution);
+                        *x = bmi3_lsb_to_dps(sensor_data.sens_data.gyr.x, (float)2000, dev->resolution);
+                        *y = bmi3_lsb_to_dps(sensor_data.sens_data.gyr.y, (float)2000, dev->resolution);
+                        *z = bmi3_lsb_to_dps(sensor_data.sens_data.gyr.z, (float)2000, dev->resolution);
 
                         /* Print the data in dps. */
-                        printf("%d, %d, %d, %d, %d, %4.2f, %4.2f, %4.2f\n",
+                        ESP_LOGI(TAG, "%d, %d, %d, %d, %d, %4.2f, %4.2f, %4.2f",
                                indx,
                                config.cfg.gyr.range,
                                sensor_data.sens_data.gyr.x,
                                sensor_data.sens_data.gyr.y,
                                sensor_data.sens_data.gyr.z,
-                               x,
-                               y,
-                               z);
+                               *x,
+                               *y,
+                               *z);
 
                         indx++;
                     }
                 }
-            }
+            
         }
-    }
-
-    bmi3_coines_deinit();
-
     return rslt;
 }
 
 /*!
  *  @brief This internal API is used to set configurations for gyro.
  */
-static int8_t set_gyro_config(struct bmi3_dev *dev)
+static int8_t bmi3_set_gyro_config(struct bmi3_dev *dev)
 {
     struct bmi3_map_int map_int = { 0 };
 
@@ -207,7 +186,7 @@ static int8_t set_gyro_config(struct bmi3_dev *dev)
  * @brief This function converts lsb to degree per second for 16 bit gyro at
  * range 125, 250, 500, 1000 or 2000dps.
  */
-static float lsb_to_dps(int16_t val, float dps, uint8_t bit_width)
+static float bmi3_lsb_to_dps(int16_t val, float dps, uint8_t bit_width)
 {
     double power = 2;
 

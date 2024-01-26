@@ -7,8 +7,12 @@
 /******************************************************************************/
 /*!                 Header Files                                              */
 #include <stdio.h>
-#include "bmi323.h"
-#include "common.h"
+#include "../../bmi323.h"
+#include "../../../BMI323_Wrapper.h"
+#include "esp_log.h"
+
+static const char *TAG = "VRGloveControllerBMI323SelfCalibration";
+
 
 /******************************************************************************/
 /*!         Static Function Declaration                                       */
@@ -20,7 +24,7 @@
  *
  *  @return Status of execution.
  */
-static int8_t set_accel_config(struct bmi3_dev *dev);
+static int8_t bmi3_set_accel_config(struct bmi3_dev *dev);
 
 /*!
  *  @brief This internal API is used to set configurations for gyro.
@@ -29,17 +33,14 @@ static int8_t set_accel_config(struct bmi3_dev *dev);
  *
  *  @return Status of execution.
  */
-static int8_t set_gyro_config(struct bmi3_dev *dev);
+static int8_t bmi3_set_gyro_config(struct bmi3_dev *dev);
 
 /******************************************************************************/
 /*!            Functions                                                      */
 
 /* This function starts the execution of program. */
-int main(void)
+int self_calibration(struct bmi3_dev *dev)
 {
-    /* Sensor initialization configuration. */
-    struct bmi3_dev dev = { 0 };
-
     /* Structure to define the self-calibration result and error result */
     struct bmi3_self_calib_rslt sc_rslt;
 
@@ -61,103 +62,83 @@ int main(void)
     /* Structure instance of gyro dp gain offset */
     struct bmi3_gyr_dp_gain_offset gyr_dp_gain_offset = { 0 };
 
-    /* Function to select interface between SPI and I2C, according to that the device structure gets updated.
-     * Interface reference is given as a parameter
-     * For I2C : BMI3_I2C_INTF
-     * For SPI : BMI3_SPI_INTF
-     */
-    rslt = bmi3_interface_init(&dev, BMI3_SPI_INTF);
-    bmi3_error_codes_print_result("bmi3_interface_init", rslt);
-
-    if (rslt == BMI323_OK)
-    {
-        /* Initialize bmi323 */
-        rslt = bmi323_init(&dev);
-        bmi3_error_codes_print_result("bmi323_init", rslt);
-
-        rslt = set_accel_config(&dev);
+        rslt = bmi3_set_accel_config(dev);
         bmi3_error_codes_print_result("set_accel_config", rslt);
 
-        rslt = set_gyro_config(&dev);
+        rslt = bmi3_set_gyro_config(dev);
         bmi3_error_codes_print_result("set_gyro_config", rslt);
 
-        if (rslt == BMI323_OK)
-        {
             for (idx = 0; idx < limit; idx++)
             {
                 if ((idx + 1) == BMI3_SC_SENSITIVITY_EN)
                 {
-                    printf("Self-calibration for sensitivity mode\n");
+                    ESP_LOGI(TAG, "Self-calibration for sensitivity mode");
                 }
                 else
                 {
-                    printf("\n\nSelf-calibration for offset mode\n");
+                    ESP_LOGI(TAG, "Self-calibration for offset mode");
                 }
 
                 /* Performs self-calibration for either sensitivity, offset or both */
-                rslt = bmi323_perform_gyro_sc(sc_selection[idx], apply_corr, &sc_rslt, &dev);
+                rslt = bmi323_perform_gyro_sc(sc_selection[idx], apply_corr, &sc_rslt, dev);
                 bmi3_error_codes_print_result("bmi323_perform_gyro_sc", rslt);
 
                 if ((rslt == BMI323_OK) && (sc_rslt.gyro_sc_rslt == BMI323_TRUE))
                 {
-                    printf("Self calibration is successfully completed \n");
+                    ESP_LOGI(TAG, "Self calibration is successfully completed ");
                 }
 
                 if ((rslt == BMI323_OK) && (sc_rslt.gyro_sc_rslt == BMI323_FALSE))
                 {
-                    printf("Self calibration is not successfully completed \n");
+                    ESP_LOGI(TAG, "Self calibration is not successfully completed ");
 
                     switch (sc_rslt.sc_error_rslt)
                     {
                         case BMI3_SC_ST_ABORTED_MASK:
-                            printf("SC_ST_ABORTED\n");
+                            ESP_LOGI(TAG, "SC_ST_ABORTED");
                             break;
                         case BMI3_SC_ST_PRECON_ERR_MASK:
-                            printf("BMI323_SC_ST_PRECON_ERR\n");
+                            ESP_LOGI(TAG, "BMI323_SC_ST_PRECON_ERR");
                             break;
                         case BMI3_MODE_CHANGE_WHILE_SC_ST_MASK:
-                            printf("BMI323_MODE_CHANGE_WHILE_SC_ST\n");
+                            ESP_LOGI(TAG, "BMI323_MODE_CHANGE_WHILE_SC_ST");
                             break;
                         default:
                             break;
                     }
                 }
 
-                printf("Result of self-calibration error \n");
+                ESP_LOGI(TAG, "Result of self-calibration error ");
 
                 if (((sc_rslt.sc_error_rslt & BMI3_SET_LOW_NIBBLE) == BMI3_NO_ERROR_MASK))
                 {
-                    printf("\tNo error\n");
+                    ESP_LOGI(TAG, "\tNo error");
                 }
                 else
                 {
-                    printf("\tError: %d\n", sc_rslt.sc_error_rslt & BMI3_SET_LOW_NIBBLE);
+                    ESP_LOGI(TAG, "\tError: %d", sc_rslt.sc_error_rslt & BMI3_SET_LOW_NIBBLE);
                 }
 
                 if (sc_rslt.sc_error_rslt & BMI3_SC_ST_COMPLETE_MASK)
                 {
-                    printf("\tSelf-calibration procedure is completed.\n");
+                    ESP_LOGI(TAG, "\tSelf-calibration procedure is completed.");
                 }
                 else
                 {
-                    printf("\tError: Self-calibration procedure is not completed\n");
+                    ESP_LOGI(TAG, "\tError: Self-calibration procedure is not completed");
                 }
 
-                printf("\nResult of self-calibration is %d\n", sc_rslt.gyro_sc_rslt);
+                ESP_LOGI(TAG, "Result of self-calibration is %d", sc_rslt.gyro_sc_rslt);
 
-                rslt = bmi323_get_gyro_dp_off_dgain(&gyr_dp_gain_offset, &dev);
+                rslt = bmi323_get_gyro_dp_off_dgain(&gyr_dp_gain_offset, dev);
                 bmi3_error_codes_print_result("bmi323_get_gyro_off_dgain", rslt);
-                printf("Result of gyro dp offset x is %d\n", gyr_dp_gain_offset.gyr_dp_off_x);
-                printf("Result of gyro dp offset y is %d\n", gyr_dp_gain_offset.gyr_dp_off_y);
-                printf("Result of gyro dp offset z is %d\n", gyr_dp_gain_offset.gyr_dp_off_z);
-                printf("Result of gyro dp gain x is %d\n", gyr_dp_gain_offset.gyr_dp_dgain_x);
-                printf("Result of gyro dp gain y is %d\n", gyr_dp_gain_offset.gyr_dp_dgain_y);
-                printf("Result of gyro dp gain z is %d\n", gyr_dp_gain_offset.gyr_dp_dgain_z);
+                ESP_LOGI(TAG, "Result of gyro dp offset x is %d", gyr_dp_gain_offset.gyr_dp_off_x);
+                ESP_LOGI(TAG, "Result of gyro dp offset y is %d", gyr_dp_gain_offset.gyr_dp_off_y);
+                ESP_LOGI(TAG, "Result of gyro dp offset z is %d", gyr_dp_gain_offset.gyr_dp_off_z);
+                ESP_LOGI(TAG, "Result of gyro dp gain x is %d", gyr_dp_gain_offset.gyr_dp_dgain_x);
+                ESP_LOGI(TAG, "Result of gyro dp gain y is %d", gyr_dp_gain_offset.gyr_dp_dgain_y);
+                ESP_LOGI(TAG, "Result of gyro dp gain z is %d", gyr_dp_gain_offset.gyr_dp_dgain_z);
             }
-        }
-    }
-
-    bmi3_coines_deinit();
 
     return rslt;
 }
@@ -165,7 +146,7 @@ int main(void)
 /*!
  * @brief This internal API is used to set configurations for accel.
  */
-static int8_t set_accel_config(struct bmi3_dev *dev)
+static int8_t bmi3_set_accel_config(struct bmi3_dev *dev)
 {
     /* Status of API are returned to this variable. */
     int8_t rslt;
@@ -224,7 +205,7 @@ static int8_t set_accel_config(struct bmi3_dev *dev)
 /*!
  *  @brief This internal API is used to set configurations for gyro.
  */
-static int8_t set_gyro_config(struct bmi3_dev *dev)
+static int8_t bmi3_set_gyro_config(struct bmi3_dev *dev)
 {
     struct bmi3_map_int map_int = { 0 };
 
