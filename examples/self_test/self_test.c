@@ -8,7 +8,7 @@
 /*!                 Header Files                                              */
 #include <stdio.h>
 #include "../../bmi323.h"
-#include "../../../BMI323_Wrapper.h"
+#include "BMI323_Wrapper.h"
 #include "esp_log.h"
 
 static const char *TAG = "VRGloveControllerBMI323SelfTest";
