@@ -57,7 +57,7 @@ int self_test(struct bmi3_dev *dev)
 
                 if ((rslt == BMI323_OK) && (st_result_status.self_test_rslt == BMI323_FALSE))
                 {
-                    ESP_LOGI(TAG, "Self-test is not successfully completed");
+                    ESP_LOGE(TAG, "Self-test is not successfully completed");
 
                     switch (st_result_status.self_test_err_rslt)
                     {

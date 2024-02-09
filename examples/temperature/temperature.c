@@ -8,7 +8,7 @@
 /*!                 Header Files                                              */
 #include <stdio.h>
 #include "../../bmi323.h"
-#include "../../../BMI323_Wrapper.h"
+#include "BMI323_Wrapper.h"
 #include "esp_log.h"
 
 static const char *TAG = "VRGloveControllerBMI323Temperature";
@@ -22,8 +22,6 @@ int temperature(struct bmi3_dev *dev, float *temperature_value)
     /* Status of API are returned to this variable. */
     int8_t rslt;
 
-    /* Sensor initialization configuration. */
-    struct bmi3_dev dev = { 0 };
 
     /* Variable to define limit to print temperature data. */
     uint16_t limit = 100;
@@ -82,14 +80,14 @@ int temperature(struct bmi3_dev *dev, float *temperature_value)
                             rslt = bmi323_get_temperature_data(&temperature_data, dev);
                             bmi3_error_codes_print_result("bmi323_get_sensor_data", rslt);
 
-                            temperature_value = (float)((((float)((int16_t)temperature_data)) / 512.0) + 23.0);
+                            *temperature_value = (float)((((float)((int16_t)temperature_data)) / 512.0) + 23.0);
 
                             rslt = bmi323_get_sensor_time(&sensor_time, dev);
                             bmi3_error_codes_print_result("bmi323_get_sensor_data", rslt);
 
                             ESP_LOGI(TAG, "%d, %f, %.4lf",
                                    indx,
-                                   temperature_value,
+                                   *temperature_value,
                                    (sensor_time * BMI3_SENSORTIME_RESOLUTION));
 
                             indx++;
